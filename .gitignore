@@ -3,6 +3,8 @@ __pycache__/
 *.ipynb_checkpoints
 .env
 .env.*
+.vscode
+.virtual_documents
 data/raw/
 data/processed/
 outputs/
