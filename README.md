@@ -15,4 +15,5 @@ Este projeto de pesquisa busca construir um sistema capaz de converter música e
 ```bash
 conda env create -f environment.yml
 conda activate tradutor-sensorial
+python -m ipykernel install --user --name=sensory-translation --display-name "Python (sensory-translation)"
 jupyter lab
