@@ -33,7 +33,7 @@ class Wave3DViewer:
           """Componentes """
           freqs, magnitudes, spectrum = apply_fft(self.signal, self.fs)
           self.dom_freqs = get_dominant_frequencies(
-          freqs, magnitudes, threshold=0.05)[:2]
+          freqs, magnitudes, threshold=0.05)[:10]
           self.fft_freqs = fftfreq(len(self.signal), 1 / self.fs)
           self.spectrum = spectrum
 
@@ -42,15 +42,15 @@ class Wave3DViewer:
           # self.comp2 = self.reconstruct_component(self.dom_freqs[1])
           self.comp1 = self.reconstruct_component(
               self.dom_freqs[0])[:len(self.signal)]
-          self.comp2 = self.reconstruct_component(self.dom_freqs[1])[:len(self.signal)]
+          self.comp2 = self.reconstruct_component(self.dom_freqs[7])[:len(self.signal)]
 
           # Parâmetros de perspectiva (Z = profundidade crescente)
           self.z1 = self.z.copy()#np.linspace(-0.1, 10, len(self.comp1))*30  # profundidade
-          self.y1 = self.comp1 *30                    # amplitude no eixo X
+          self.y1 = self.comp1 *10                    # amplitude no eixo X
           self.x1 = np.zeros_like(self.comp1)
 
           self.z2 = self.z.copy()#np.linspace(-0.1, 10, len(self.comp2)) *30 # profundidade
-          self.y2 = self.comp2      *30               # amplitude no eixo X
+          self.y2 = self.comp2      *10               # amplitude no eixo X
           self.x2 = np.zeros_like(self.comp2)
           """"""""""""""""""""""""""""""
 
@@ -240,7 +240,7 @@ class Wave3DViewer:
 if __name__ == '__main__':
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     AUDIO_PATH = os.path.join(
-        BASE_DIR, "..", "..", "data", "raw", "ES_Ten Thousand Miles Away - OTE.wav")
+        BASE_DIR, "..", "..", "data", "raw", "Ludovico Einaudi - Experience.wav")
     
 viewer = Wave3DViewer(AUDIO_PATH)
 app.run()
