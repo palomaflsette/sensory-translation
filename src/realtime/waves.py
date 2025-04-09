@@ -24,7 +24,7 @@ class Wave3DViewer:
           self.fs, len(self.signal))
           
           # Parâmetros de perspectiva (Z = profundidade crescente)
-          self.z = np.linspace(-0.1, 10, len(self.signal))*10  # profundidade
+          self.z = np.linspace(-0.1, 10, len(self.signal))  # profundidade
           self.x = self.signal                     # amplitude no eixo X
           # pode dar leve curvatura se quiser
           self.y = np.zeros_like(self.signal)
@@ -38,16 +38,19 @@ class Wave3DViewer:
           self.spectrum = spectrum
 
           # Reconstrói componentes dominantes
-          self.comp1 = self.reconstruct_component(self.dom_freqs[0])
-          self.comp2 = self.reconstruct_component(self.dom_freqs[1])
+          # self.comp1 = self.reconstruct_component(self.dom_freqs[0])
+          # self.comp2 = self.reconstruct_component(self.dom_freqs[1])
+          self.comp1 = self.reconstruct_component(
+              self.dom_freqs[0])[:len(self.signal)]
+          self.comp2 = self.reconstruct_component(self.dom_freqs[1])[:len(self.signal)]
 
           # Parâmetros de perspectiva (Z = profundidade crescente)
-          self.z1 = np.linspace(0, 10, len(self.comp1))*30  # profundidade
-          self.y1 = self.comp1 *50                    # amplitude no eixo X
+          self.z1 = self.z.copy()#np.linspace(-0.1, 10, len(self.comp1))*30  # profundidade
+          self.y1 = self.comp1 *30                    # amplitude no eixo X
           self.x1 = np.zeros_like(self.comp1)
 
-          self.z2 = np.linspace(0, 10, len(self.comp2)) *30 # profundidade
-          self.y2 = self.comp2      *50               # amplitude no eixo X
+          self.z2 = self.z.copy()#np.linspace(-0.1, 10, len(self.comp2)) *30 # profundidade
+          self.y2 = self.comp2      *30               # amplitude no eixo X
           self.x2 = np.zeros_like(self.comp2)
           """"""""""""""""""""""""""""""
 
@@ -57,7 +60,7 @@ class Wave3DViewer:
 
           self.max_index_comp1 = len(self.comp1)
           self.max_index_comp2 = len(self.comp2)
-          self.step = int(self.fs * 0.05)  # 5ms
+          self.step = int(self.fs * 0.07)  # 5ms
 
           # Cria a cena
           self.canvas = scene.SceneCanvas(
@@ -66,7 +69,7 @@ class Wave3DViewer:
 
           # Câmera fixa, olhando para a profundidade
           self.view.camera = scene.cameras.TurntableCamera(
-          elevation=1.0, azimuth=-90.0, distance=5.3, up='y'
+          elevation=20.0, azimuth=-90.0, distance=1.3, up='y'
           )
           self.view.camera.fov = 45
           self.view.camera.center = (0, 0, 5)  # Começa olhando "pra frente"
@@ -186,8 +189,14 @@ class Wave3DViewer:
           
      def update(self, event):
           # Crescimento da curva
-          end = min(self.current_index + self.step, self.max_index)
-     
+          #end = min(self.current_index + self.step, self.max_index)
+          
+          # lógica de avanço baseada no tempo real decorrido
+          elapsed = timer() - self.start_time
+          end = int(self.fs * elapsed)
+          end = min(end, self.max_index)
+
+
           # Curva principal
           x = self.x[:end]
           y = self.y[:end]-0.05
@@ -196,7 +205,7 @@ class Wave3DViewer:
           self.line.set_data(pos=pos)
 
           # Componente 1
-          x1 = self.x1[:end]+0.07
+          x1 = self.x1[:end]+0.5
           y1 = self.y1[:end]
           z1 = self.z1[:end]-0.1
           pos1 = np.c_[x1, y1, z1]
@@ -204,7 +213,7 @@ class Wave3DViewer:
 
 
           # Componente 2
-          x2 = self.x2[:end]-0.07
+          x2 = self.x2[:end]-0.5
           y2 = self.y2[:end]
           z2 = self.z2[:end]-0.1
           pos2 = np.c_[x2, y2, z2]
@@ -216,17 +225,22 @@ class Wave3DViewer:
                self.timer.stop()
 
           # Animação da câmera após 20 segundos
-          elapsed = timer() - self.start_time
+          # elapsed = timer() - self.start_time
 
-          if elapsed > 5.0:
+
+          # #if elapsed > 5.0:
+          # cam = self.view.camera
+          # cam.distance -= 0.01  # aumenta suavemente
+          # Atualiza a posição da câmera de acordo com o último ponto desenhado
+          if len(z) > 0:
                cam = self.view.camera
-               cam.distance -= 0.008  # aumenta suavemente
-
+               last_z = z[-1]
+               cam.center = (0, 0, last_z)
 
 if __name__ == '__main__':
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     AUDIO_PATH = os.path.join(
-    BASE_DIR, "..", "..", "data", "raw", "Ludovico Einaudi - Experience.wav")
+        BASE_DIR, "..", "..", "data", "raw", "ES_Ten Thousand Miles Away - OTE.wav")
     
 viewer = Wave3DViewer(AUDIO_PATH)
 app.run()
