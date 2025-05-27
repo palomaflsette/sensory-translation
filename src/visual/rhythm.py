@@ -1,0 +1,3 @@
+""" 
+detecção e modelagem rítmica
+"""

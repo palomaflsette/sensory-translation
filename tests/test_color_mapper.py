@@ -1,4 +1,4 @@
-from src.mapping.color_mapper import frequency_to_rgb
+from src.utils.color_mapping import frequency_to_rgb
 
 
 def test_rgb_low_freq():
