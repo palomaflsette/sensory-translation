@@ -13,6 +13,8 @@ struct LayerState {
   bool isActive;
 };
 
+String inputBuffer = "";
+
 LayerState windingLayer = {-1, -1, true};
 LayerState waveLayer = {-1, -1, true};
 LayerState spectrumLayer = {-1, -1, true};
@@ -40,15 +42,38 @@ unsigned long lastWaveUpdate = 0;
 float currentBPM = 120.0;
 unsigned long lastBeatTime = 0;
 
-// Variáveis para espectro com transição suave
-int spectrumBars[10] = {0};          // Valores atuais (alvo)
-int currentSpectrumBars[10] = {0};   // Valores sendo exibidos (atual)
-int previousSpectrumBars[10] = {0};  // Valores anteriores para comparação
+// Variáveis para espectro
 unsigned long lastSpectrumUpdate = 0;
-const int SPECTRUM_UPDATE_INTERVAL = 30; // Atualizar a cada 30ms
-const float SPECTRUM_LERP_SPEED = 0.15;   // Velocidade da interpolação (0.1 = lento, 0.5 = rápido)
+const int SPECTRUM_UPDATE_INTERVAL = 30;
+const float SPECTRUM_LERP_SPEED = 0.15;
 
-String inputBuffer = "";
+// Variáveis para detecção de silêncio e mensagens
+unsigned long lastAudioTime = 0;
+bool isInSilence = false;
+bool hasShownSilenceMessage = false;
+bool hasShownWelcome = false;
+unsigned long silenceStartTime = 0;
+const unsigned long SILENCE_THRESHOLD = 2000; // 2 segundos de silêncio
+int currentSilenceMessage = 0;
+
+// Mensagens de silêncio artísticas
+const char* silenceMessages[] = {
+  "So quiet...",
+  "~ Silence ~",
+  "Listen...",
+  "Shh...",
+  "Peaceful...",
+  "Waiting...",
+  "~ ~ ~",
+  "Breathe...",
+  "Stillness...",
+  "Zen..."
+};
+const int NUM_SILENCE_MESSAGES = 10;
+
+// Variáveis para animação de texto
+float textAnimPhase = 0.0;
+unsigned long lastTextUpdate = 0;
 
 // Declarações das funções
 void clearAll();
@@ -65,6 +90,12 @@ void updateSpectrumLayer(String spectrumData);
 void drawSpectrum();
 void updateSpectrumAnimation();
 void updateWavePhase();
+void showWelcomeScreen();
+void checkSilenceState();
+void showSilenceMessage();
+void clearSilenceMessage();
+void updateSilenceAnimation();
+uint16_t getAnimatedColor(float phase);
 
 void setup() {
   Serial.begin(115200);
@@ -73,17 +104,27 @@ void setup() {
   if (ID == 0xD3D3) ID = 0x9481;
   tft.begin(ID);
   tft.setRotation(1);
-  tft.fillScreen(0x0000); // Preto
-
+  
+  // Mostrar tela de boas-vindas
+  showWelcomeScreen();
+  
   Serial.println("ARDUINO_LAYERED_READY");
 }
 
 void loop() {
+  // Verificar estado de silêncio
+  checkSilenceState();
+  
   // Atualizar fase da onda continuamente para movimento suave
   updateWavePhase();
   
   // Atualizar animação do espectro
   updateSpectrumAnimation();
+  
+  // Atualizar animação de silêncio se necessário
+  if (isInSilence && hasShownSilenceMessage) {
+    updateSilenceAnimation();
+  }
   
   while (Serial.available() > 0) {
     char c = Serial.read();
@@ -96,7 +137,149 @@ void loop() {
   }
 }
 
+void showWelcomeScreen() {
+  tft.fillScreen(0x0000); // Fundo preto
+  
+  // Título principal "MUSTEM"
+  tft.setTextSize(4);
+  tft.setTextColor(0xF81F); // Magenta
+  int titleWidth = 6 * 5 * 4; // 6 chars * 5 pixels * scale 4
+  int titleX = (SCREEN_WIDTH - titleWidth) / 2;
+  tft.setCursor(titleX, 60);
+  tft.print("MUSTEM");
+  
+  // Subtítulo
+  tft.setTextSize(2);
+  tft.setTextColor(0x07FF); // Ciano
+  String subtitle = "Music Visualization";
+  int subtitleWidth = subtitle.length() * 6 * 2;
+  int subtitleX = (SCREEN_WIDTH - subtitleWidth) / 2;
+  tft.setCursor(subtitleX, 120);
+  tft.print(subtitle);
+  
+  // Linha decorativa
+  tft.drawLine(50, 160, SCREEN_WIDTH - 50, 160, 0x07E0); // Verde
+  
+  // Aguardar um momento
+  delay(3000);
+  
+  // Limpar tela
+  tft.fillScreen(0x0000);
+  hasShownWelcome = true;
+}
+
+void checkSilenceState() {
+  unsigned long currentTime = millis();
+  
+  // Se recebeu áudio recentemente, não está em silêncio
+  if (currentTime - lastAudioTime < SILENCE_THRESHOLD) {
+    if (isInSilence) {
+      // Saindo do silêncio
+      isInSilence = false;
+      hasShownSilenceMessage = false;
+      clearSilenceMessage();
+    }
+  } else {
+    // Está em silêncio
+    if (!isInSilence) {
+      // Entrando em silêncio
+      isInSilence = true;
+      silenceStartTime = currentTime;
+      hasShownSilenceMessage = false;
+      // Escolher uma mensagem aleatória
+      currentSilenceMessage = (currentTime / 1000) % NUM_SILENCE_MESSAGES;
+    }
+    
+    // Mostrar mensagem de silêncio se ainda não mostrou
+    if (!hasShownSilenceMessage && (currentTime - silenceStartTime > 500)) {
+      showSilenceMessage();
+      hasShownSilenceMessage = true;
+    }
+  }
+}
+
+void showSilenceMessage() {
+  // Limpar área central
+  tft.fillRect(0, 80, SCREEN_WIDTH, 80, 0x0000);
+  
+  // Configurar texto
+  tft.setTextSize(3);
+  
+  // Calcular posição centralizada
+  String message = silenceMessages[currentSilenceMessage];
+  int textWidth = message.length() * 6 * 3; // chars * 6 pixels * scale 3
+  int textX = (SCREEN_WIDTH - textWidth) / 2;
+  int textY = 110;
+  
+  // Cor inicial
+  tft.setTextColor(getAnimatedColor(0));
+  tft.setCursor(textX, textY);
+  tft.print(message);
+}
+
+void clearSilenceMessage() {
+  // Limpar área da mensagem
+  tft.fillRect(0, 80, SCREEN_WIDTH, 80, 0x0000);
+}
+
+void updateSilenceAnimation() {
+  unsigned long currentTime = millis();
+  
+  if (currentTime - lastTextUpdate > 150) { // Atualizar a cada 150ms
+    lastTextUpdate = currentTime;
+    
+    // Atualizar fase da animação
+    textAnimPhase += 0.3;
+    if (textAnimPhase > 6.28) { // 2 * PI
+      textAnimPhase = 0;
+    }
+    
+    // Redesenhar texto com nova cor
+    String message = silenceMessages[currentSilenceMessage];
+    int textWidth = message.length() * 6 * 3;
+    int textX = (SCREEN_WIDTH - textWidth) / 2;
+    int textY = 110;
+    
+    // Limpar área do texto
+    tft.fillRect(textX - 5, textY - 5, textWidth + 10, 30, 0x0000);
+    
+    // Desenhar com cor animada
+    tft.setTextSize(3);
+    tft.setTextColor(getAnimatedColor(textAnimPhase));
+    tft.setCursor(textX, textY);
+    tft.print(message);
+    
+    // Adicionar pontos decorativos animados
+    for (int i = 0; i < 3; i++) {
+      int dotX = textX - 30 + i * 15;
+      int dotY = textY + 15 + sin(textAnimPhase + i * 2) * 5;
+      uint16_t dotColor = getAnimatedColor(textAnimPhase + i * 1.5);
+      tft.fillCircle(dotX, dotY, 2, dotColor);
+    }
+    
+    for (int i = 0; i < 3; i++) {
+      int dotX = textX + textWidth + 15 + i * 15;
+      int dotY = textY + 15 + sin(textAnimPhase + i * 2 + 3.14) * 5;
+      uint16_t dotColor = getAnimatedColor(textAnimPhase + i * 1.5 + 3.14);
+      tft.fillCircle(dotX, dotY, 2, dotColor);
+    }
+  }
+}
+
+uint16_t getAnimatedColor(float phase) {
+  // Criar um ciclo de cores suaves
+  int r = 128 + 127 * sin(phase);
+  int g = 128 + 127 * sin(phase + 2.09); // +120 graus
+  int b = 128 + 127 * sin(phase + 4.18); // +240 graus
+  
+  // Converter para RGB565
+  return tft.color565(r, g, b);
+}
+
 void processCommand() {
+  // Marcar que recebeu áudio
+  lastAudioTime = millis();
+  
   if (inputBuffer.startsWith("WINDING:")) {
     drawWindingPoint(inputBuffer.substring(8));
   }
@@ -144,14 +327,9 @@ void clearAll() {
 }
 
 void clearWindings() {
-  // Limpar apenas a área das windings (método simples: redesenhar fundo)
   tft.fillScreen(0x0000);
-  
-  // Redesenhar ondas e espectro se estiverem ativos
   redrawWaveLayer();
   redrawSpectrumLayer();
-  
-  // Reset do estado das windings
   windingLayer.prevX = -1;
   windingLayer.prevY = -1;
   windingIndex = 0;
@@ -174,25 +352,15 @@ void resetAllLayers() {
   lastWaveUpdate = 0;
   lastBeatTime = 0;
   lastSpectrumUpdate = 0;
-  for (int i = 0; i < 10; i++) {
-    spectrumBars[i] = 0;
-    currentSpectrumBars[i] = 0;
-    previousSpectrumBars[i] = 0;
-  }
 }
 
 void redrawWaveLayer() {
   if (!waveLayer.isActive || currentWaveAmplitude == 0.0) return;
-  
-  // Redesenhar a onda senoidal atual
   drawSineWave(currentWaveAmplitude*5);
 }
 
 void redrawSpectrumLayer() {
   if (!spectrumLayer.isActive) return;
-  
-  // Redesenhar as barras do espectro
-  drawSpectrum();
 }
 
 void drawWindingPoint(String pointStr) {
@@ -229,7 +397,6 @@ void drawWindingPoint(String pointStr) {
 void updateWaveLayer(String waveData) {
   if (!waveLayer.isActive) return;
   
-  // Parse: amplitude,frequencia_dominante,tempo_multiplier,beat_strength
   int i1 = waveData.indexOf(',');
   int i2 = waveData.indexOf(',', i1 + 1);
   int i3 = waveData.indexOf(',', i2 + 1);
@@ -240,13 +407,11 @@ void updateWaveLayer(String waveData) {
     currentTempoMultiplier = waveData.substring(i2 + 1, i3).toFloat();
     currentBeatStrength = waveData.substring(i3 + 1).toFloat();
   } else {
-    // Fallback para formato antigo (só amplitude)
     currentWaveAmplitude = waveData.toFloat();
   }
 }
 
 void updateRhythmData(String rhythmData) {
-  // Parse: bpm,beat_strength,tempo_multiplier
   int i1 = rhythmData.indexOf(',');
   int i2 = rhythmData.indexOf(',', i1 + 1);
   
@@ -255,7 +420,6 @@ void updateRhythmData(String rhythmData) {
     float beatStrength = rhythmData.substring(i1 + 1, i2).toFloat();
     currentTempoMultiplier = rhythmData.substring(i2 + 1).toFloat();
     
-    // Se há uma batida forte, marcar o tempo
     if (beatStrength > 0.7) {
       lastBeatTime = millis();
     }
@@ -265,46 +429,40 @@ void updateRhythmData(String rhythmData) {
 void updateWavePhase() {
   unsigned long currentTime = millis();
   
-  if (currentTime - lastWaveUpdate > 20) { // Atualizar a cada 20ms (50 FPS)
+  if (currentTime - lastWaveUpdate > 20) {
     lastWaveUpdate = currentTime;
     
     if (waveLayer.isActive && currentWaveAmplitude > 0.01) {
-      // Limpar onda anterior
-      drawSineWave(currentWaveAmplitude*5, 0x0011); // Preto para apagar
+      drawSineWave(currentWaveAmplitude*5, 0x0000);
       
-      // Calcular nova fase baseada no tempo e BPM
-      float phaseSpeed = currentTempoMultiplier * 0.15; // Velocidade base
+      float phaseSpeed = currentTempoMultiplier * 0.15;
       
-      // Acelerar na batida forte
       unsigned long timeSinceBeat = currentTime - lastBeatTime;
-      if (timeSinceBeat < 200) { // 200ms após a batida
+      if (timeSinceBeat < 200) {
         float beatEffect = 1.0 + currentBeatStrength * 2.0;
         phaseSpeed *= beatEffect;
       }
       
       wavePhase += phaseSpeed;
-      if (wavePhase > 2 * PI * 10) { // Reset para evitar overflow
+      if (wavePhase > 2 * PI * 10) {
         wavePhase = 0;
       }
       
-      // Desenhar nova onda
       drawSineWave(currentWaveAmplitude*5);
     }
   }
 }
 
 void drawSineWave(float amplitude, uint16_t color) {
-  int centerY = SCREEN_HEIGHT - 30; // Parte inferior da tela
+  int centerY = SCREEN_HEIGHT - 30;
   int waveWidth = SCREEN_WIDTH;
   
-  // Calcular frequência da onda baseada na frequência dominante
-  float waveFrequency = map(currentDominantFreq, 80, 2000, 30, 100); // Mapear para freq visual
+  float waveFrequency = map(currentDominantFreq, 80, 2000, 30, 100);
   waveFrequency = constrain(waveFrequency, 20, 120);
   
-  // Amplitude com efeito de batida
-  float finalAmplitude = amplitude * 30; // Amplitude base maior
+  float finalAmplitude = amplitude * 30;
   unsigned long timeSinceBeat = millis() - lastBeatTime;
-  if (timeSinceBeat < 300) { // Efeito por 300ms
+  if (timeSinceBeat < 300) {
     float beatEffect = 1.0 + (currentBeatStrength * 0.5 * (1.0 - timeSinceBeat / 300.0));
     finalAmplitude *= beatEffect;
   }
@@ -312,19 +470,15 @@ void drawSineWave(float amplitude, uint16_t color) {
   finalAmplitude = constrain(finalAmplitude, 0, 40);
   
   for (int x = 0; x < waveWidth - 1; x++) {
-    // Onda principal
     int y1 = centerY + (int)(finalAmplitude * sin(2 * PI * x / waveFrequency + wavePhase));
     int y2 = centerY + (int)(finalAmplitude * sin(2 * PI * (x + 1) / waveFrequency + wavePhase));
     
     y1 = constrain(y1, 0, SCREEN_HEIGHT - 1);
     y2 = constrain(y2, 0, SCREEN_HEIGHT - 1);
     
-    // Cor que varia com a frequência (se não for para apagar)
     uint16_t finalColor = color;
     if (color != 0x0000) {
-      // Variar cor baseada na frequência dominante
       int hue = map(currentDominantFreq, 80, 2000, 0, 255);
-      // Converter para RGB simplificado
       if (hue < 85) {
         finalColor = tft.color565(255 - hue * 3, hue * 3, 0);
       } else if (hue < 170) {
@@ -338,7 +492,6 @@ void drawSineWave(float amplitude, uint16_t color) {
     
     tft.drawLine(x, y1, x + 1, y2, finalColor);
     
-    // Adicionar harmônicos sutis para música complexa
     if (color != 0x0000 && amplitude > 0.3) {
       int y1_harm = centerY + (int)(finalAmplitude * 0.3 * sin(2 * PI * x / (waveFrequency * 0.5) + wavePhase * 1.5));
       y1_harm = constrain(y1_harm, 0, SCREEN_HEIGHT - 1);
@@ -354,117 +507,12 @@ void drawSineWave(float amplitude, uint16_t color) {
 
 void updateSpectrumLayer(String spectrumData) {
   if (!spectrumLayer.isActive) return;
-  
-  // Parse dos dados do espectro (valores separados por vírgula)
-  int barIndex = 0;
-  int startPos = 0;
-  int commaPos = 0;
-  
-  // Atualizar apenas os valores alvo, sem redesenhar imediatamente
-  while (barIndex < 10 && commaPos >= 0) {
-    commaPos = spectrumData.indexOf(',', startPos);
-    String valueStr;
-    
-    if (commaPos > 0) {
-      valueStr = spectrumData.substring(startPos, commaPos);
-    } else {
-      valueStr = spectrumData.substring(startPos);
-    }
-    
-    spectrumBars[barIndex] = valueStr.toInt();
-    barIndex++;
-    startPos = commaPos + 1;
-  }
-  
-  // A animação será tratada pela função updateSpectrumAnimation()
 }
 
 void updateSpectrumAnimation() {
   if (!spectrumLayer.isActive) return;
-  
-  unsigned long currentTime = millis();
-  
-  if (currentTime - lastSpectrumUpdate > SPECTRUM_UPDATE_INTERVAL) {
-    lastSpectrumUpdate = currentTime;
-    
-    // Verificar se há mudanças a fazer
-    bool needsUpdate = false;
-    
-    for (int i = 0; i < 10; i++) {
-      // Interpolação linear (lerp) entre valor atual e valor alvo
-      float target = (float)spectrumBars[i];
-      float current = (float)currentSpectrumBars[i];
-      
-      if (abs(target - current) > 1) { // Só atualizar se a diferença for significativa
-        float newValue = current + (target - current) * SPECTRUM_LERP_SPEED;
-        int newIntValue = (int)newValue;
-        
-        if (newIntValue != currentSpectrumBars[i]) {
-          previousSpectrumBars[i] = currentSpectrumBars[i];
-          currentSpectrumBars[i] = newIntValue;
-          needsUpdate = true;
-        }
-      }
-    }
-    
-    if (needsUpdate) {
-      drawSpectrum();
-    }
-  }
 }
 
 void drawSpectrum() {
-  int barWidth = SCREEN_WIDTH / 10;
-  int maxHeight = 60; // Aumentei um pouco para ficar mais visível
-  
-  for (int i = 0; i < 10; i++) {
-    int newBarHeight = map(currentSpectrumBars[i], 0, 255, 0, maxHeight);
-    int oldBarHeight = map(previousSpectrumBars[i], 0, 255, 0, maxHeight);
-    
-    int x = i * barWidth;
-    
-    // Se a nova barra é menor que a anterior, limpar a parte superior
-    if (newBarHeight < oldBarHeight) {
-      int clearStart = SCREEN_HEIGHT - oldBarHeight;
-      int clearEnd = SCREEN_HEIGHT - newBarHeight;
-      
-      for (int j = 0; j < barWidth - 2; j++) {
-        tft.drawLine(x + j, clearStart, x + j, clearEnd, 0x0000); // Preto para apagar
-      }
-    }
-    
-    // Desenhar a nova parte da barra (se necessário)
-    if (newBarHeight > 0) {
-      int barStart = SCREEN_HEIGHT - newBarHeight;
-      int barEnd = SCREEN_HEIGHT - 1;
-      
-      // Cor baseada na altura da barra e posição (frequência)
-      uint16_t color;
-      if (i < 3) {
-        // Graves - vermelho para laranja
-        color = tft.color565(255, i * 40, 0);
-      } else if (i < 7) {
-        // Médios - laranja para amarelo
-        color = tft.color565(255, 150 + (i-3) * 25, 0);
-      } else {
-        // Agudos - amarelo para branco
-        int brightness = 200 + (i-7) * 15;
-        color = tft.color565(255, brightness, brightness/2);
-      }
-      
-      // Ajustar intensidade baseada na altura
-      float intensity = (float)newBarHeight / maxHeight;
-      int r = ((color >> 11) & 0x1F) * intensity;
-      int g = ((color >> 5) & 0x3F) * intensity;
-      int b = (color & 0x1F) * intensity;
-      
-      color = tft.color565(r * 8, g * 4, b * 8); // Converter de volta para RGB565
-      
-      for (int j = 1; j < barWidth - 1; j++) { // Deixar 1 pixel de espaço entre barras
-        tft.drawLine(x + j, barStart, x + j, barEnd, color);
-      }
-    }
-    
-    previousSpectrumBars[i] = currentSpectrumBars[i];
-  }
+  // Barras do espectro ainda desabilitadas
 }

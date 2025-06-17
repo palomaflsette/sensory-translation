@@ -7,6 +7,7 @@ from audio.rhythm import RhythmDetector
 
 class VisualLayerManager:
     def __init__(self, ser):
+        self.silence_mode = False
         self.ser = ser
         self.last_winding_clear = 0
         self.last_wave_update = 0
