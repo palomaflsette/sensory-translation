@@ -277,20 +277,17 @@ uint16_t getAnimatedColor(float phase) {
 }
 
 void processCommand() {
-  // Marcar que recebeu áudio
+  // Atualizar timestamp do último áudio recebido
   lastAudioTime = millis();
   
-  if (inputBuffer.startsWith("WINDING:")) {
-    drawWindingPoint(inputBuffer.substring(8));
-  }
-  else if (inputBuffer == "CLEAR") {
+  if (inputBuffer == "CLEAR") {
     clearAll();
   }
   else if (inputBuffer == "CLEAR_WINDINGS") {
     clearWindings();
   }
-  else if (inputBuffer == "CLEAR_ALL") {
-    clearAll();
+  else if (inputBuffer.startsWith("WINDING:")) {
+    drawWindingPoint(inputBuffer.substring(8));
   }
   else if (inputBuffer.startsWith("WAVE:")) {
     updateWaveLayer(inputBuffer.substring(5));
