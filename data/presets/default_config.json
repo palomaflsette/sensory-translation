@@ -1,0 +1,66 @@
+{
+  "window_width": 1600,
+  "window_height": 900,
+  "target_fps": 60,
+  "arduino_port": "COM3",
+  "arduino_baudrate": 115200,
+  
+  "audio_gains": {
+    "bass_gain": 1.2,
+    "mid_gain": 1.0,
+    "treble_gain": 1.5,
+    "beat_sensitivity": 1.3
+  },
+  
+  "performance": {
+    "effect_quality": "high",
+    "particle_limit": 8000,
+    "enable_antialiasing": true,
+    "background_alpha": 15
+  },
+  
+  "debug": {
+    "show_fps": true,
+    "show_audio_data": true,
+    "log_level": "INFO"
+  },
+  
+  "visual_modes": [
+    {
+      "name": "full_spectrum",
+      "display_name": "🌈 Espectro Completo",
+      "effects": ["frequency_bars", "polar_flower", "particle_explosion"],
+      "primary_color_scheme": "rainbow"
+    },
+    {
+      "name": "lorenz_dream",
+      "display_name": "🌀 Sonho de Lorenz", 
+      "effects": ["lorenz_attractor"],
+      "primary_color_scheme": "dynamic"
+    },
+    {
+      "name": "particle_storm",
+      "display_name": "✨ Tempestade de Partículas",
+      "effects": ["particle_explosion", "frequency_bars"],
+      "primary_color_scheme": "fire"
+    }
+  ],
+  
+  "color_schemes": {
+    "rainbow": {
+      "hue_range": [0.0, 1.0],
+      "saturation": 0.9,
+      "brightness": 0.9
+    },
+    "dynamic": {
+      "hue_range": [0.0, 0.8], 
+      "saturation": 0.8,
+      "brightness": 0.95
+    },
+    "fire": {
+      "hue_range": [0.0, 0.15],
+      "saturation": 1.0,
+      "brightness": 1.0
+    }
+  }
+}
